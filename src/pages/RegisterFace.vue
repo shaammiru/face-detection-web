@@ -1,16 +1,35 @@
 <template>
-  <div class="p-4 max-w-md mx-auto space-y-4">
-    <h1 class="text-2xl font-bold mb-4">Register Face</h1>
+  <div class="max-w-md mx-auto">
+    <div class="mb-8">
+      <h1 class="text-3xl font-semibold text-gray-900">Register Face</h1>
+      <p class="mt-2 text-gray-600">Add a new face to the recognition system</p>
+    </div>
 
-    <video ref="videoRef" autoplay playsinline class="w-full rounded shadow" />
+    <div class="card p-4 mb-6">
+      <video ref="videoRef" autoplay playsinline class="w-full rounded-lg shadow-inner bg-gray-100" />
+    </div>
 
-    <input v-model="name" type="text" placeholder="Enter name..." class="w-full border p-2 rounded" />
+    <div class="space-y-4">
+      <div>
+        <label for="name" class="block text-sm font-medium text-gray-700 mb-1">Name</label>
+        <input id="name" v-model="name" type="text" placeholder="Enter person's name" class="input-field" />
+      </div>
 
-    <button @click="captureAndSubmit" class="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700">
-      Register Face
-    </button>
+      <button @click="captureAndSubmit" class="btn-primary w-full flex justify-center items-center gap-2"
+        :disabled="!name">
+        <span>Register Face</span>
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd"
+            d="M4 5a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-1.586a1 1 0 01-.707-.293l-1.121-1.121A2 2 0 0011.172 3H8.828a2 2 0 00-1.414.586L6.293 4.707A1 1 0 015.586 5H4zm6 9a3 3 0 100-6 3 3 0 000 6z"
+            clip-rule="evenodd" />
+        </svg>
+      </button>
 
-    <p v-if="status" class="text-sm text-green-600">{{ status }}</p>
+      <div v-if="status" class="mt-4 p-4 rounded-md"
+        :class="status.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'">
+        {{ status.message }}
+      </div>
+    </div>
   </div>
 </template>
 
@@ -19,7 +38,7 @@ import { ref, onMounted } from 'vue'
 
 const videoRef = ref(null)
 const name = ref('')
-const status = ref('')
+const status = ref(null)
 
 const API_URL = import.meta.env.VITE_API_URL
 
@@ -29,13 +48,19 @@ onMounted(() => {
       videoRef.value.srcObject = stream
     })
     .catch(err => {
-      alert('Failed to access camera: ' + err.message)
+      status.value = {
+        type: 'error',
+        message: 'Failed to access camera: ' + err.message
+      }
     })
 })
 
 const captureAndSubmit = async () => {
   if (!name.value) {
-    alert('Please enter a name.')
+    status.value = {
+      type: 'error',
+      message: 'Please enter a name'
+    }
     return
   }
 
@@ -58,11 +83,17 @@ const captureAndSubmit = async () => {
     })
 
     if (!res.ok) throw new Error('Registration failed')
-    const data = await res.json()
-    status.value = '✅ Registered successfully!'
+
+    status.value = {
+      type: 'success',
+      message: '✨ Face registered successfully!'
+    }
     name.value = ''
   } catch (err) {
-    alert('❌ ' + err.message)
+    status.value = {
+      type: 'error',
+      message: '❌ ' + err.message
+    }
   }
 }
 </script>
@@ -71,5 +102,13 @@ const captureAndSubmit = async () => {
 video {
   aspect-ratio: 3/4;
   object-fit: cover;
+}
+
+.input-field:disabled {
+  @apply bg-gray-100 cursor-not-allowed;
+}
+
+.btn-primary:disabled {
+  @apply opacity-50 cursor-not-allowed;
 }
 </style>
