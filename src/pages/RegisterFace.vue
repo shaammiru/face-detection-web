@@ -99,6 +99,8 @@ const captureAndSubmit = async () => {
 </script>
 
 <style scoped>
+@reference 'tailwindcss';
+
 video {
   aspect-ratio: 3/4;
   object-fit: cover;
