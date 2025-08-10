@@ -6,7 +6,12 @@
     </div>
 
     <div class="card p-4 mb-6">
-      <video ref="videoRef" autoplay playsinline class="w-full rounded-lg shadow-inner bg-gray-100" />
+      <!-- Video when capturing -->
+      <video v-if="!previewImage" ref="videoRef" autoplay playsinline
+        class="w-full rounded-lg shadow-inner bg-gray-100" />
+
+      <!-- Image preview after capture -->
+      <img v-else :src="previewImage" alt="Captured face" class="w-full rounded-lg shadow-inner bg-gray-100" />
     </div>
 
     <div class="space-y-4">
@@ -15,15 +20,17 @@
         <input id="name" v-model="name" type="text" placeholder="Enter person's name" class="input-field" />
       </div>
 
-      <button @click="captureAndSubmit" class="btn-primary w-full flex justify-center items-center gap-2"
-        :disabled="!name">
-        <span>Register Face</span>
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-          <path fill-rule="evenodd"
-            d="M4 5a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-1.586a1 1 0 01-.707-.293l-1.121-1.121A2 2 0 0011.172 3H8.828a2 2 0 00-1.414.586L6.293 4.707A1 1 0 015.586 5H4zm6 9a3 3 0 100-6 3 3 0 000 6z"
-            clip-rule="evenodd" />
-        </svg>
+      <!-- Show capture button if no preview -->
+      <button v-if="!previewImage" @click="capturePreview"
+        class="btn-primary w-full flex justify-center items-center gap-2" :disabled="!name">
+        <span>Capture Face</span>
       </button>
+
+      <!-- Show confirm / retake buttons if preview is shown -->
+      <div v-else class="flex gap-2">
+        <button @click="submitRegistration" class="btn-primary flex-1">Confirm</button>
+        <button @click="retake" class="btn-secondary flex-1">Retake</button>
+      </div>
 
       <div v-if="status" class="mt-4 p-4 rounded-md"
         :class="status.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'">
@@ -33,16 +40,35 @@
   </div>
 </template>
 
+
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 
 const videoRef = ref(null)
 const name = ref('')
 const status = ref(null)
+const previewImage = ref(null)
+let stream = null
+let capturedBlob = null
 
 const API_URL = import.meta.env.VITE_API_URL
 
-onMounted(() => {
+onMounted(async () => {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: true })
+    videoRef.value.srcObject = stream
+  } catch (err) {
+    console.error('Failed to access camera:', err)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (stream) {
+    stream.getTracks().forEach(track => track.stop())
+  }
+})
+
+function startCamera() {
   navigator.mediaDevices.getUserMedia({ video: true })
     .then(stream => {
       videoRef.value.srcObject = stream
@@ -53,27 +79,45 @@ onMounted(() => {
         message: 'Failed to access camera: ' + err.message
       }
     })
-})
+}
 
-const captureAndSubmit = async () => {
-  if (!name.value) {
-    status.value = {
-      type: 'error',
-      message: 'Please enter a name'
-    }
+// Capture image to preview
+const capturePreview = async () => {
+  const video = videoRef.value
+  const size = Math.min(video.videoWidth, video.videoHeight)
+  const startX = (video.videoWidth - size) / 2
+  const startY = (video.videoHeight - size) / 2
+
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')
+
+  ctx.translate(canvas.width, 0)
+  ctx.scale(-1, 1)
+
+  ctx.drawImage(video, startX, startY, size, size, 0, 0, size, size)
+
+  capturedBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg'))
+  previewImage.value = URL.createObjectURL(capturedBlob)
+}
+
+// Retake photo
+const retake = () => {
+  previewImage.value = null
+  capturedBlob = null
+  startCamera()
+}
+
+// Submit captured image
+const submitRegistration = async () => {
+  if (!name.value || !capturedBlob) {
+    status.value = { type: 'error', message: 'Please enter a name and capture a face first' }
     return
   }
 
-  const canvas = document.createElement('canvas')
-  canvas.width = videoRef.value.videoWidth
-  canvas.height = videoRef.value.videoHeight
-  const ctx = canvas.getContext('2d')
-  ctx.drawImage(videoRef.value, 0, 0)
-
-  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg'))
-
   const formData = new FormData()
-  formData.append('file', blob, 'face.jpg')
+  formData.append('file', capturedBlob, 'face.jpg')
   formData.append('name', name.value)
 
   try {
@@ -89,6 +133,9 @@ const captureAndSubmit = async () => {
       message: '✨ Face registered successfully!'
     }
     name.value = ''
+    previewImage.value = null
+    capturedBlob = null
+    startCamera()
   } catch (err) {
     status.value = {
       type: 'error',
@@ -102,8 +149,9 @@ const captureAndSubmit = async () => {
 @reference 'tailwindcss';
 
 video {
-  aspect-ratio: 3/4;
+  aspect-ratio: 1/1;
   object-fit: cover;
+  transform: scaleX(-1);
 }
 
 .input-field:disabled {
